@@ -17,6 +17,11 @@ parser.add_argument("--filename_electrons",
                     "-f_electrons",
                     help="Specify a filename (electrons) to be evaluated. Defaults to electrons.txt",
                     default='data\electrons.txt')
+parser.add_argument("--fit_plot",
+                    "-fp",
+                    help="Specify which fit to plot. Defaults to 22",
+					type=int,
+                    default=22)
 
 # parse it
 args = parser.parse_args()
@@ -35,7 +40,7 @@ peak_dist_before = 5
 peak_dist_after = 2
 
 # which measurement section to plot
-fittoplot = 22
+fittoplot = args.fit_plot
 
 # lambda to remove nA unit from reading files
 remove_nA = lambda s: float(s.decode("utf-8").replace(' nA', ''))
@@ -121,24 +126,28 @@ for i in range(0, maxima.shape[0] - 1):
 
 gammaplot, = ax0.plot(data[:, 0], data[:, 3])
 maximaplot, = ax0.plot(maxima[:, 0], maxima[:, 1], 'x')
-ax0.set_title('Gamma')
-ax0.set_xlabel('Time (s)')
-ax0.set_ylabel('Gamma')
-ax0.legend([gammaplot, maximaplot, fitplot], ['Gamma', 'Peak Maxima', 'Fit to section {}'.format(fittoplot)])
+ax0.set_title('$\gamma$ from raw data')
+ax0.set_xlabel('time (s)')
+ax0.set_ylabel('$\gamma$ (-)')
+ax0.legend([gammaplot, maximaplot, fitplot], ['$\gamma$', 'peak maxima', 'fit to section {}'.format(fittoplot)])
 
 electronplot, = ax1.plot(data[:, 0], data[:, 2])
-ax1.set_title('Electron current')
-ax1.set_xlabel('Time (s)')
-ax1.set_ylabel('Current (nA)')
+ax1.set_title('electron current')
+ax1.set_xlabel('time (s)')
+ax1.set_ylabel('current (nA)')
 
 ionplot, = ax2.plot(data[:, 0], data[:, 1])
 ionelectronplot, = ax2.plot(data[:, 0], data[:, 1] + data[:, 2])
-ax2.set_xlabel('Time (s)')
-ax2.set_ylabel('Current (nA)')
-ax2.legend([ionplot, ionelectronplot], ['Ion Current', 'Sum of Ion and Electron current'])
+ax2.set_xlabel('time (s)')
+ax2.set_ylabel('current (nA)')
+ax2.legend([ionplot, ionelectronplot], ['ion current', 'sum of ion and electron current'])
 
 ax3.plot(range(0, maxima.shape[0] - 1), fit_results[:, 0], 'b+')
-ax3.set_title('Gamma')
-ax3.set_xlabel('Measurement Position')
+ax3.set_title('$\gamma$ evaluated')
+ax3.set_ylabel('$\gamma$ (-)')
+ax3.set_xlabel('measurement position')
+
+fig1.tight_layout()
+fig1.suptitle('data from: {}'.format(fn_electrons))
 
 plt.show()
