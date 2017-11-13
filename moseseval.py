@@ -3,9 +3,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal
 from scipy import optimize
+import argparse
 
-fn_electrons = 'data/electrons.txt'
-fn_ions = 'data/ions.txt'
+# using the argparse module to make use of command line options
+parser = argparse.ArgumentParser(description="Evaluation script for MoSES measurements")
+
+# add commandline options
+parser.add_argument("--filename_ions",
+                    "-f_ions",
+                    help="Specify a filename (ions) to be evaluated. Defaults to ions.txt",
+                    default='data\ions.txt')
+parser.add_argument("--filename_electrons",
+                    "-f_electrons",
+                    help="Specify a filename (electrons) to be evaluated. Defaults to electrons.txt",
+                    default='data\electrons.txt')
+
+# parse it
+args = parser.parse_args()
+
+fn_electrons = args.filename_electrons
+fn_ions = args.filename_ions
 
 # number of measurement cycles
 m_cycles = 25
@@ -34,7 +51,7 @@ electrons = np.loadtxt(fn_electrons, skiprows=0, usecols=1, delimiter=',', conve
 # import ions
 # check whether the file exists. if not, try to use it as a relative path.
 if not os.path.exists(fn_ions):
-    fn_electrons = os.path.normcase(os.path.join(os.path.dirname(__file__), fn_ions))
+    fn_ions = os.path.normcase(os.path.join(os.path.dirname(__file__), fn_ions))
 
 ions = np.loadtxt(fn_ions, skiprows=0, delimiter=',', converters={1: remove_nA}, dtype=np.float64)
 
