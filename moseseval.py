@@ -35,6 +35,12 @@ m_cycles = 25
 co_start = 250
 co_end = 7850
 
+# minimum optimality for fit. if larger than that, a "molecule-potential" (negative amplitude) is tried
+min_optimality_req = 1e-6
+
+# maximum time constant to be accepted for fit.
+max_time_constant = 2000
+
 # time to not use for fitting before and after a peak
 peak_dist_before = 5
 peak_dist_after = 2
@@ -97,12 +103,23 @@ ax2 = fig1.add_subplot(2, 2, 3)
 ax3 = fig1.add_subplot(2, 2, 4)
 
 # prepare list of results
-fit_results = np.zeros((maxima.shape[0] - 1, 6), dtype=np.float64)
+fit_results = np.zeros((m_cycles, 6), dtype=np.float64)
+boundary_met = [None]*m_cycles # to note, whether a boundary was met by a fit parameter
+
+# boundaries for fits
+bounds_lower = [0.0, min(data[:, 0]), -1e6, 0, -1e6, 0]
+bounds_upper = [0.3, max(data[:, 0]), 1e6, 900, 1e6, 900]
+
+bounds_range = np.array(bounds_upper) - np.array(bounds_lower)
 
 # loop through all between-maxima-intervals
-for i in range(0, maxima.shape[0] - 1):
+for i in range(0, m_cycles):
     # select proper data interval
-    fitdata = data[np.where((data[:, 0] >= maxima[i, 0] + peak_dist_after) & (data[:, 0] <= maxima[i + 1, 0] - peak_dist_before)), :][0]
+    try:
+        fitdata = data[np.where((data[:, 0] >= maxima[i, 0] + peak_dist_after) & (data[:, 0] <= maxima[i + 1, 0] - peak_dist_before)), :][0]
+    except IndexError:
+        # last one
+        fitdata = data[np.where(data[:, 0] >= maxima[i, 0] + peak_dist_after), :][0]
 
     # starting values for fit
     p[0] = 0.08 # gamma
@@ -114,15 +131,39 @@ for i in range(0, maxima.shape[0] - 1):
 
     # fit the data
     try:
-        res = optimize.least_squares(errfunc, np.asarray(p, dtype=np.float64), args=(fitdata[:, 0], fitdata[:, 3]))
+        res = optimize.least_squares(errfunc, np.asarray(p, dtype=np.float64), args=(fitdata[:, 0], fitdata[:, 3]), bounds=(bounds_lower, bounds_upper))
         p1 = res.x
-        fit_results[i, :] = p1
+
+        if res.optimality > min_optimality_req:
+            print('Optimality larger than {} for cycle {}. Retrying with new parameters.'.format(min_optimality_req, i+1))
+            # fit did not converge well. could be a molecule-potential-like case. try new starting parameters
+            p[0] = fit_results[i-1, 0]  # gamma
+            p[1] = maxima[i, 0]  # time offset
+            p[2] = 0.05
+            p[3] = 8
+            p[4] = -0.01
+            p[5] = 100
+
+            res = optimize.least_squares(errfunc, np.asarray(p, dtype=np.float64), args=(fitdata[:, 0], fitdata[:, 3]), bounds=(bounds_lower, bounds_upper))
+            p1 = res.x
+            print('New optimality: {}'.format(res.optimality))
+
     except TypeError:
-        print('Could not fit section {}.'.format(i))
+        print('Could not fit section {}.'.format(i+1))
         p1 = [None] * 6
+
+    fit_results[i, :] = p1
+
+    # try to detect, whether one of the parameters came close to a boundary.
+    # bounds_range_percentage is 0 for value at bounds_lower, 1 for value at bounds_upper
+    bounds_range_percentage=  np.divide(np.abs(bounds_lower + p1), bounds_range)
+    # note if any of the values is close (1e-4) to a boundary
+    boundary_met[i] = np.any(np.piecewise(bounds_range_percentage, [1 - bounds_range_percentage < 1e-4, bounds_range_percentage < 1e-4], [1, 1]))
 
     if i == fittoplot - 1:
         fitplot, = ax0.plot(fitdata[:, 0], exp_decay_2(p1, fitdata[:, 0]), 'r-')
+        print('Fit results for {}'.format(fittoplot))
+        print(fit_results[i, :])
 
 gammaplot, = ax0.plot(data[:, 0], data[:, 3])
 maximaplot, = ax0.plot(maxima[:, 0], maxima[:, 1], 'x')
@@ -142,7 +183,12 @@ ax2.set_xlabel('time (s)')
 ax2.set_ylabel('current (nA)')
 ax2.legend([ionplot, ionelectronplot], ['ion current', 'sum of ion and electron current'])
 
-ax3.plot(range(0, maxima.shape[0] - 1), fit_results[:, 0], 'b+')
+for i in range(0, m_cycles):
+    if boundary_met[i]:
+        ax3.plot(i+1, fit_results[i, 0], 'r+')
+    else:
+        ax3.plot(i + 1, fit_results[i, 0], 'b+')
+
 ax3.set_title('$\gamma$ evaluated')
 ax3.set_ylabel('$\gamma$ (-)')
 ax3.set_xlabel('measurement position')
