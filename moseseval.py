@@ -30,7 +30,7 @@ fn_electrons = args.filename_electrons
 fn_ions = args.filename_ions
 
 # number of measurement cycles
-m_cycles = 24
+m_cycles = 25
 # cutoffs
 co_start = 250
 co_end = 7850
@@ -112,7 +112,7 @@ extrema[:, 0] = data[extrema_ind, 0]
 # use the <number of measurement cycles> highest/lowest peaks
 extrema = extrema[np.argsort(extrema[:, 1])]
 if minima_used is not True:
-    extrema = extrema[np.argsort(extrema[:, 1])]
+    extrema = extrema[-m_cycles:, :]
 else:
     extrema = extrema[:m_cycles, :]
 
