@@ -30,7 +30,7 @@ fn_electrons = args.filename_electrons
 fn_ions = args.filename_ions
 
 # number of measurement cycles
-m_cycles = 25
+m_cycles = 24
 # cutoffs
 co_start = 250
 co_end = 7850
@@ -48,6 +48,9 @@ peak_dist_after = 2
 # which measurement section to plot
 fittoplot = args.fit_plot
 
+# this determines, whether minima are used instead of maxima
+minima_used = False
+
 # lambda to remove nA unit from reading files
 remove_nA = lambda s: float(s.decode("utf-8").replace(' nA', ''))
 
@@ -64,30 +67,57 @@ electrons = np.loadtxt(fn_electrons, skiprows=0, usecols=1, delimiter=',', conve
 if not os.path.exists(fn_ions):
     fn_ions = os.path.normcase(os.path.join(os.path.dirname(__file__), fn_ions))
 
+# export path for the fit results
+export_file_results = fn_ions.split('_ions.')[0] + '_results.txt'
+export_file_gamma = fn_ions.split('_ions.')[0] + '_gamma.txt'
+
 ions = np.loadtxt(fn_ions, skiprows=0, delimiter=',', converters={1: remove_nA}, dtype=np.float64)
 
 # combine everything into one array: 0 = time, 1 = ions, 2 = electrons, 3 = gamma
 data = np.zeros((ions.shape[0], 4), dtype=np.float64)
 data[:, 0] = ions[:, 0]
 data[:, 1] = ions[:, 1]
-data[:, 2] = electrons[0:ions.shape[0]]
+try:
+    data[:, 2] = electrons[0:ions.shape[0]]
+except ValueError:
+    # not enough electron measurement points -> let's do it the other way around
+    # combine everything into one array: 0 = time, 1 = ions, 2 = electrons, 3 = gamma
+    data = np.zeros((electrons.shape[0], 4), dtype=np.float64)
+    data[:, 0] = ions[0:electrons.shape[0], 0]
+    data[:, 1] = ions[0:electrons.shape[0], 1]
+    data[:, 2] = electrons[:]
+
 data[:, 3] = np.abs(data[:, 2]) / (np.abs(data[:, 1]) - np.abs(data[:, 2]))
 
 # cutoff data in the beginning and end
 data = data[np.where((data[:, 0] >= co_start) & (data[:, 0] <= co_end)), :][0]
 
-# find maxima
-maxima_ind = scipy.signal.argrelmax(data[:, 3], order=300)
-maxima = np.zeros((len(maxima_ind[0]), 2), np.float64)
-maxima[:, 1] = data[maxima_ind, 3]
-maxima[:, 0] = data[maxima_ind, 0]
+# find extrema
+extrema_ind = scipy.signal.argrelmax(data[:, 3], order=300)
 
-# use the <number of measurement cycles> highest peaks
-maxima = maxima[np.argsort(maxima[:, 1])]
-maxima = maxima[-m_cycles:, :]
+if len(extrema_ind[0]) < m_cycles:
+    print('Not enough extrema found. Trying minima.')
+    extrema_ind = scipy.signal.argrelmin(data[:, 3], order=300)
+    print(extrema_ind)
+    minima_used = True
+
+    if len(extrema_ind[0]) < m_cycles:
+        print('Not enough minima either. Is m_cycles set correctly?')
+        quit()
+
+extrema = np.zeros((len(extrema_ind[0]), 2), np.float64)
+extrema[:, 1] = data[extrema_ind, 3]
+extrema[:, 0] = data[extrema_ind, 0]
+
+# use the <number of measurement cycles> highest/lowest peaks
+extrema = extrema[np.argsort(extrema[:, 1])]
+if minima_used is not True:
+    extrema = extrema[np.argsort(extrema[:, 1])]
+else:
+    extrema = extrema[:m_cycles, :]
 
 # resort by time
-maxima = maxima[np.argsort(maxima[:, 0])]
+extrema = extrema[np.argsort(extrema[:, 0])]
 
 # define error function for fit
 exp_decay_2 = lambda p, x: p[0] + p[2]*np.exp(-(x-p[1])/p[3]) + p[4]*np.exp(-(x-p[1])/p[5])
@@ -112,18 +142,18 @@ bounds_upper = [0.3, max(data[:, 0]), 1e6, 900, 1e6, 900]
 
 bounds_range = np.array(bounds_upper) - np.array(bounds_lower)
 
-# loop through all between-maxima-intervals
+# loop through all between-extrema-intervals
 for i in range(0, m_cycles):
     # select proper data interval
     try:
-        fitdata = data[np.where((data[:, 0] >= maxima[i, 0] + peak_dist_after) & (data[:, 0] <= maxima[i + 1, 0] - peak_dist_before)), :][0]
+        fitdata = data[np.where((data[:, 0] >= extrema[i, 0] + peak_dist_after) & (data[:, 0] <= extrema[i + 1, 0] - peak_dist_before)), :][0]
     except IndexError:
         # last one
-        fitdata = data[np.where(data[:, 0] >= maxima[i, 0] + peak_dist_after), :][0]
+        fitdata = data[np.where(data[:, 0] >= extrema[i, 0] + peak_dist_after), :][0]
 
     # starting values for fit
     p[0] = 0.08 # gamma
-    p[1] = maxima[i, 0]# time offset
+    p[1] = extrema[i, 0]# time offset
     p[2] = 0.05
     p[3] = 8
     p[4] = 0.01
@@ -138,7 +168,7 @@ for i in range(0, m_cycles):
             print('Optimality larger than {} for cycle {}. Retrying with new parameters.'.format(min_optimality_req, i+1))
             # fit did not converge well. could be a molecule-potential-like case. try new starting parameters
             p[0] = fit_results[i-1, 0]  # gamma
-            p[1] = maxima[i, 0]  # time offset
+            p[1] = extrema[i, 0]  # time offset
             p[2] = 0.05
             p[3] = 8
             p[4] = -0.01
@@ -166,11 +196,11 @@ for i in range(0, m_cycles):
         print(fit_results[i, :])
 
 gammaplot, = ax0.plot(data[:, 0], data[:, 3])
-maximaplot, = ax0.plot(maxima[:, 0], maxima[:, 1], 'x')
+maximaplot, = ax0.plot(extrema[:, 0], extrema[:, 1], 'x')
 ax0.set_title('$\gamma$ from raw data')
 ax0.set_xlabel('time (s)')
 ax0.set_ylabel('$\gamma$ (-)')
-ax0.legend([gammaplot, maximaplot, fitplot], ['$\gamma$', 'peak maxima', 'fit to section {}'.format(fittoplot)])
+ax0.legend([gammaplot, maximaplot, fitplot], ['$\gamma$', 'peak extrema', 'fit to section {}'.format(fittoplot)])
 
 electronplot, = ax1.plot(data[:, 0], data[:, 2])
 ax1.set_title('electron current')
@@ -195,5 +225,21 @@ ax3.set_xlabel('measurement position')
 
 fig1.tight_layout()
 fig1.suptitle('data from: {}'.format(fn_electrons))
+
+# export fit shit to a file
+export_values = np.concatenate(
+    (np.arange(1, m_cycles + 1).reshape((m_cycles, 1)), fit_results[:, [0, 3, 5]]), axis=1)
+np.savetxt(export_file_results,
+           export_values,
+           fmt=('%d', '%10.4f', '%10.4f', '%10.4f'),
+           delimiter='\t',
+header='Measurement\tGamma\tTime constant 1\tTime constant 2')
+
+#export gamma to a new file
+np.savetxt(export_file_gamma,
+           data[:, [0, 3]],
+           fmt=('%10.1f', '%10.4f'),
+           delimiter='\t',
+header='Time (s)\tGamma')
 
 plt.show()
