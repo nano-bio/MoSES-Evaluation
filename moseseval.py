@@ -30,7 +30,13 @@ fn_electrons = args.filename_electrons
 fn_ions = args.filename_ions
 
 # number of measurement cycles
-m_cycles = 25
+m_cycles = 26
+cycle_time = 300
+cycle_offset = 322
+extrema_search_range = 15
+# this determines, whether minima are used instead of maxima
+minima_used = False
+
 # cutoffs
 co_start = 250
 co_end = 7850
@@ -47,9 +53,6 @@ peak_dist_after = 2
 
 # which measurement section to plot
 fittoplot = args.fit_plot
-
-# this determines, whether minima are used instead of maxima
-minima_used = False
 
 # lambda to remove nA unit from reading files
 remove_nA = lambda s: float(s.decode("utf-8").replace(' nA', ''))
@@ -93,28 +96,28 @@ data[:, 3] = np.abs(data[:, 2]) / (np.abs(data[:, 1]) - np.abs(data[:, 2]))
 data = data[np.where((data[:, 0] >= co_start) & (data[:, 0] <= co_end)), :][0]
 
 # find extrema
-extrema_ind = scipy.signal.argrelmax(data[:, 3], order=300)
+extrema = np.zeros((m_cycles, 2), np.float64)
 
-if len(extrema_ind[0]) < m_cycles:
-    print('Not enough extrema found. Trying minima.')
-    extrema_ind = scipy.signal.argrelmin(data[:, 3], order=300)
-    print(extrema_ind)
-    minima_used = True
+for i in range(0, m_cycles):
+    # restrict to search range
+    range_end = i * cycle_time + cycle_offset + extrema_search_range
+    range_start = i * cycle_time + cycle_offset - extrema_search_range
+    if range_end < co_start:
+        print('Skipping first peak - please re-check your cutoff an search range settings!')
+        continue
+    search_range = data[np.where((data[:, 0] >= range_start) & (data[:, 0] <= range_end)), :][0]
 
-    if len(extrema_ind[0]) < m_cycles:
-        print('Not enough minima either. Is m_cycles set correctly?')
-        quit()
+    # search for maximum / minimum
+    if not minima_used:
+        extrema[i, 1] = max(search_range[:, 3])
+    else:
+        extrema[i, 1] = min(search_range[:, 3])
 
-extrema = np.zeros((len(extrema_ind[0]), 2), np.float64)
-extrema[:, 1] = data[extrema_ind, 3]
-extrema[:, 0] = data[extrema_ind, 0]
-
-# use the <number of measurement cycles> highest/lowest peaks
-extrema = extrema[np.argsort(extrema[:, 1])]
-if minima_used is not True:
-    extrema = extrema[-m_cycles:, :]
-else:
-    extrema = extrema[:m_cycles, :]
+    try:
+        extrema[i, 0] = search_range[np.where(search_range[:, 3] == extrema[i, 1]), 0][0]
+    except ValueError:
+        # apparently there where two equally extreme extrema - let's just take the first one
+        extrema[i, 0] = search_range[np.where(search_range[:, 3] == extrema[i, 1]), 0][0][0]
 
 # resort by time
 extrema = extrema[np.argsort(extrema[:, 0])]
