@@ -197,6 +197,8 @@ for i in range(0, m_cycles):
         fitplot, = ax0.plot(fitdata[:, 0], exp_decay_2(p1, fitdata[:, 0]), 'r-')
         print('Fit results for {}'.format(fittoplot))
         print(fit_results[i, :])
+    else:
+        ax0.plot(fitdata[:, 0], exp_decay_2(p1, fitdata[:, 0]), 'g-')
 
 gammaplot, = ax0.plot(data[:, 0], data[:, 3])
 maximaplot, = ax0.plot(extrema[:, 0], extrema[:, 1], 'x')
