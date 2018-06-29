@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal
 from scipy import optimize
+from scipy.linalg import svd
 import argparse
 
 # using the argparse module to make use of command line options
@@ -32,7 +33,7 @@ fn_ions = args.filename_ions
 # number of measurement cycles
 m_cycles = 26
 cycle_time = 300
-cycle_offset = 322
+cycle_offset = 276
 extrema_search_range = 15
 # this determines, whether minima are used instead of maxima
 minima_used = False
@@ -145,6 +146,22 @@ bounds_upper = [0.3, max(data[:, 0]), 1e6, 900, 1e6, 900]
 
 bounds_range = np.array(bounds_upper) - np.array(bounds_lower)
 
+def calc_std_deviation(res):
+    """
+    Calculate the standard deviation from the Jacobian returned by the fit result.
+    From scipy: https://github.com/scipy/scipy/blob/11509c4a98edded6c59423ac44ca1b7f28fba1fd/scipy/optimize/minpack.py#L762
+    """
+
+    # Code from scipy
+    _, s, VT = svd(res.jac, full_matrices=False)
+    threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
+    s = s[s > threshold]
+    VT = VT[:s.size]
+    pcov = np.dot(VT.T / s**2, VT)
+
+    # Std-dev is sqrt of diagonal of covariance matrix
+    return np.sqrt(np.diag(pcov))
+
 # loop through all between-extrema-intervals
 for i in range(0, m_cycles):
     # select proper data interval
@@ -166,6 +183,7 @@ for i in range(0, m_cycles):
     try:
         res = optimize.least_squares(errfunc, np.asarray(p, dtype=np.float64), args=(fitdata[:, 0], fitdata[:, 3]), bounds=(bounds_lower, bounds_upper))
         p1 = res.x
+        perr = calc_std_deviation(res)
 
         if res.optimality > min_optimality_req:
             print('Optimality larger than {} for cycle {}. Retrying with new parameters.'.format(min_optimality_req, i+1))
@@ -179,6 +197,7 @@ for i in range(0, m_cycles):
 
             res = optimize.least_squares(errfunc, np.asarray(p, dtype=np.float64), args=(fitdata[:, 0], fitdata[:, 3]), bounds=(bounds_lower, bounds_upper))
             p1 = res.x
+            perr = calc_std_deviation(res)
             print('New optimality: {}'.format(res.optimality))
 
     except TypeError:
