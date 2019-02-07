@@ -13,11 +13,11 @@ parser = argparse.ArgumentParser(description="Evaluation script for MoSES measur
 parser.add_argument("--filename_ions",
                     "-f_ions",
                     help="Specify a filename (ions) to be evaluated. Defaults to ions.txt",
-                    default='data\ions.txt')
+                    default='data/ions.txt')
 parser.add_argument("--filename_electrons",
                     "-f_electrons",
                     help="Specify a filename (electrons) to be evaluated. Defaults to electrons.txt",
-                    default='data\electrons.txt')
+                    default='data/electrons.txt')
 parser.add_argument("--fit_plot",
                     "-fp",
                     help="Specify which fit to plot. Defaults to 22",
