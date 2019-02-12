@@ -3,12 +3,12 @@ import json
 from datetime import datetime
 from time import sleep
 
-xmin = -1
-xmax = 4
-xstep = 0.2
-ymin = -1
-ymax = 4
-ystep = 0.2
+xmin = -2
+xmax = 2
+xstep = 0.5
+ymin = -2
+ymax = 2
+ystep = 0.5
 
 abs_diff = 0.001
 
@@ -16,6 +16,10 @@ csv_file_names = [
     'data/2019-01-14_17-46-15.csv',
     'data/2019-01-14_14-39-06.csv',
     'data/2019-01-14_11-41-14.csv',
+]
+
+csv_file_names = [
+    'data/2019-01-31_10-53-41.csv',
 ]
 
 
